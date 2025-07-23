@@ -1,0 +1,296 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toy Store - E-Commerce</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Header Styles */
+    header {
+      background-color: #3498db;
+      color: white;
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      font-size: 1.5rem;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin: 0 1rem;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    #cart-count {
+      background-color: #e74c3c;
+      border-radius: 50%;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    /* Loader Styles */
+    .loader {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 50px auto;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+    }
+    @keyframes spin {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .hidden {
+      display: none;
+    }
+
+    /* Main Content */
+    main {
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+    }
+    .product-card {
+      border: 1px solid #ddd;
+      padding: 1rem;
+      text-align: center;
+      border-radius: 8px;
+      transition: transform 0.2s;
+    }
+    .product-card:hover {
+      transform: scale(1.05);
+    }
+    .product-card img {
+      max-width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    .product-card h3 {
+      margin: 0.5rem 0;
+      font-size: 1.2rem;
+    }
+    .product-card p {
+      color: #555;
+      margin-bottom: 0.5rem;
+    }
+    .product-card button {
+      background-color: #2ecc71;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .product-card button:hover {
+      background-color: #27ae60;
+    }
+
+    /* Cart Section */
+    #cart {
+      margin-top: 2rem;
+      border-top: 2px solid #ddd;
+      padding-top: 1rem;
+    }
+    #cart-items {
+      list-style: none;
+    }
+    #cart-items li {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #eee;
+    }
+    #cart-items button {
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      header {
+        flex-direction: column;
+        text-align: center;
+      }
+      nav {
+        margin-top: 0.5rem;
+      }
+      .product-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Animation -->
+  <div class="loader" id="loader"></div>
+
+  <!-- Header -->
+  <header>
+    <h1>Meme Store</h1>
+    <nav>
+      <a href="#home">Home</a>
+      <a href="#products">Products</a>
+      <a href="#cart">Cart (<span id="cart-count">0</span>)</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <section id="products">
+      <h2>Our Product</h2>
+      <div class="product-grid" id="product-grid">
+        <!-- Products will be dynamically added here -->
+      </div>
+    </section>
+    <section id="cart">
+      <h2>Your Cart</h2>
+      <ul id="cart-items"></ul>
+      <p id="cart-empty">Your cart is empty.</p>
+    </section>
+  </main>
+
+  <script>
+    // Sample product data
+    const products = [
+      { id: 1, name: "Awra", price: 19.99, image: "image/Awra.jpg" },
+      { id: 2, name: "Sir Jack", price: 12.99, image: "image/Sirjack.jpg" },
+      { id: 3, name: "Meong", price: 29.99, image: "image/Meong.jpg" },
+      { id: 4, name: "Liam", price: 15.99, image: "image/Liam.jpg" }
+    ];
+
+    let cart = [];
+
+    // DOM Elements
+    const productGrid = document.getElementById('product-grid');
+    const cartItems = document.getElementById('cart-items');
+    const cartEmpty = document.getElementById('cart-empty');
+    const cartCount = document.getElementById('cart-count');
+    const loader = document.getElementById('loader');
+
+    // Simulate loading delay
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        loader.classList.add('hidden');
+      }, 1000); // Hide loader after 1 second
+    });
+
+    // Render Products
+    function renderProducts() {
+      productGrid.innerHTML = '';
+      products.forEach(product => {
+        const productCard = document.createElement('div');
+        productCard.className = 'product-card';
+        productCard.innerHTML = `
+          <img src="${product.image}" alt="${product.name}">
+          <h3>${product.name}</h3>
+          <p>$${product.price.toFixed(2)}</p>
+          <button onclick="addToCart(${product.id})">Add to Cart</button>
+        `;
+        productGrid.appendChild(productCard);
+      });
+    }
+
+    // Add to Cart
+    function addToCart(productId) {
+      const product = products.find(p => p.id === productId);
+      cart.push(product);
+      updateCart();
+    }
+
+    // Remove from Cart
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      updateCart();
+    }
+
+    // Update Cart Display
+    function updateCart() {
+      cartItems.innerHTML = '';
+      if (cart.length === 0) {
+        cartEmpty.classList.remove('hidden');
+      } else {
+        cartEmpty.classList.add('hidden');
+        cart.forEach((item, index) => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            ${item.name} - $${item.price.toFixed(2)}
+            <button onclick="removeFromCart(${index})">Remove</button>
+          `;
+          cartItems.appendChild(li);
+        });
+      }
+      cartCount.textContent = cart.length;
+    }
+
+    // Initialize
+    renderProducts();
+  </script>
+</body>
+</html>
